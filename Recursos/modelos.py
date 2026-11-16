@@ -8,8 +8,8 @@ FORMATO_FECHA = "%Y-%m-%d %H:%M"
 
 TIPOS_RECURSO = [
     "humano",
-    "material",
-    "tecnologico"
+    "equipo",
+    "unidad operativa"
 ]
 
 
@@ -27,6 +27,7 @@ class Recurso:
 
 
 
+
 # CONFIGURACIÓN DEL RF-02
 
 PRIORIDADES = [
@@ -38,8 +39,9 @@ PRIORIDADES = [
 
 ESTADOS_ACTIVIDAD = [
     "pendiente",
-    "en_progreso",
-    "completada"
+    "asignada",
+    "completada",
+    "cancelada"
 ]
 
 
