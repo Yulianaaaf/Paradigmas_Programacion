@@ -6,6 +6,10 @@ from .menu_planificacion import (                   # CAMBIO (nuevo)
     validar_planificacion,
     cargar_datos_demo
 )
+from .menu_analisis import (
+    menu_analisis_funcional,
+    menu_comparar_paralelo
+)
 
 
 def main():
@@ -19,6 +23,8 @@ def main():
         print("3. Ejecutar algoritmo inicial (RF-04)")  # CAMBIO (nuevo)
         print("4. Validar planificación (RF-03)")       # CAMBIO (nuevo)
         print("5. Cargar datos de demostración")         # CAMBIO (nuevo)
+        print("6. Análisis funcional (RF-06)")
+        print("7. Comparar secuencial y paralelo (RF-07)")
         print("0. Salir")
 
         opcion = input("Elegí una opción: ").strip()
@@ -40,6 +46,12 @@ def main():
         elif opcion == "5":                              # CAMBIO (nuevo)
             cargar_datos_demo()
             pausar()
+
+        elif opcion == "6":
+            menu_analisis_funcional()
+
+        elif opcion == "7":
+            menu_comparar_paralelo()
 
         elif opcion == "0":
             print("Saliendo del sistema...")
