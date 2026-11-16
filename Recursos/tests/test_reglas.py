@@ -10,7 +10,7 @@ import pytest
 
 from ..modelos import Actividad, Recurso
 from ..planificacion import Asignacion, Planificacion
-from ..reglas import Incidencia, MotorReglas, Regla, tramos_excedidos
+from ..reglas import Incidencia, MotorReglas, Regla
 
 
 # DATOS DE PRUEBA
@@ -81,8 +81,8 @@ def test_planificacion_valida_es_factible(motor, recursos, actividades):
     assert informe.estado == "FACTIBLE"
 
 
-def test_motor_tiene_las_nueve_reglas(motor):
-    assert [r.codigo for r in motor.reglas] == [f"R0{i}" for i in range(1, 10)]
+def test_motor_tiene_las_diez_reglas(motor):
+    assert [r.codigo for r in motor.reglas] == [f"R{i:02d}" for i in range(1, 11)]
 
 
 # CADA REGLA
@@ -153,9 +153,26 @@ def test_r05_capacidad_dos_permite_dos_simultaneas(motor, recursos, actividades)
     assert informe.factible
 
 
-def test_r05_tareas_contiguas_no_chocan():
-    # Una termina a las 12 y otra empieza a las 12: no hay superposición.
-    assert tramos_excedidos([("A", h(8), h(12)), ("B", h(12), h(14))], 1) == []
+def test_r05_tareas_contiguas_no_chocan(motor, recursos, actividades):
+    # A001 termina a las 12 y A004 empieza a las 12: no hay superposición.
+    informe = motor.validar(plan(
+        Asignacion("A001", ["R001"], h(8), h(12)),
+        Asignacion("A004", ["R001"], h(12), h(15)),
+    ), recursos, actividades)
+    assert informe.factible
+
+
+def test_r05_tres_simultaneas_con_capacidad_dos(motor, recursos, actividades):
+    recursos["R001"].capacidad = 2
+    actividades["A001"].cantidad_recursos = 1
+    informe = motor.validar(plan(
+        Asignacion("A001", ["R001"], h(8), h(12)),
+        Asignacion("A002", ["R001"], h(9), h(13)),
+        Asignacion("A004", ["R001"], h(10), h(13)),
+    ), recursos, actividades)
+    assert codigos(informe) == ["R05"]
+    assert informe.incidencias[0].actividades == ("A001", "A002", "A004")
+    assert "10:00" in informe.incidencias[0].contexto
 
 
 def test_r06_cantidad_insuficiente(motor, recursos, actividades):
@@ -204,6 +221,31 @@ def test_r09_duracion_no_coincide(motor, recursos, actividades):
     assert codigos(informe) == ["R09"]
 
 
+def test_r10_ciclo_de_dependencias_indica_cadena(motor, recursos, actividades):
+    # Ejemplo de RF-02: A005 depende de A002 y se agrega que A002 depende de A005.
+    actividades["A002"].dependencias = ["A005"]
+    informe = motor.validar(plan(Asignacion("A002", ["R001"], h(8), h(12))), recursos, actividades)
+    ciclo = informe.agrupar("regla")["R10"][0]
+    assert "A002 -> A005 -> A002" in ciclo.descripcion
+    assert ciclo.actividades == ("A002", "A005")
+
+
+def test_r10_sin_ciclos_no_reporta(motor, recursos, actividades):
+    informe = motor.validar(plan(
+        Asignacion("A002", ["R001"], h(8), h(12)),
+        Asignacion("A005", ["R002"], h(12), h(14)),
+    ), recursos, actividades)
+    assert "R10" not in informe.agrupar("regla")
+
+
+def test_r10_ciclo_ajeno_a_la_planificacion_no_la_invalida(motor, recursos, actividades):
+    # Ciclo entre actividades que no están en el plan: no afecta este plan.
+    actividades["A003"] = actividad("A003", dependencias=["A006"])
+    actividades["A006"] = actividad("A006", dependencias=["A003"])
+    informe = motor.validar(plan(Asignacion("A001", ["R001"], h(8), h(12))), recursos, actividades)
+    assert informe.factible
+
+
 # RETRASOS: penalización separada
 
 def test_retraso_no_hace_infactible(motor, recursos, actividades):
@@ -232,27 +274,27 @@ def test_reporte_agrupado_por_regla_actividad_y_recurso(motor, recursos, activid
         Asignacion("A001", ["R001"], h(8), h(12)),
         Asignacion("A004", ["R001"], h(10), h(13)),
     ), recursos, actividades)
-    assert set(informe.por_regla()) == {"R02", "R05"}
-    assert set(informe.por_actividad()) == {"A001", "A004"}
-    assert set(informe.por_recurso()) == {"R001"}
+    assert set(informe.agrupar("regla")) == {"R02", "R05"}
+    assert set(informe.agrupar("actividad")) == {"A001", "A004"}
+    assert set(informe.agrupar("recurso")) == {"R001"}
 
 
 def test_agregar_regla_nueva_sin_modificar_el_motor(motor, recursos, actividades):
     class MaximoOchoHoras(Regla):
-        codigo = "R10"
+        codigo = "R99"
         nombre = "Máximo 8 horas"
 
-        def evaluar(self, contexto):
+        def evaluar(self, plan, recursos, actividades):
             return [
                 Incidencia(self.codigo, "Supera 8 horas", (a.actividad_id,))
-                for a in contexto.planificacion.asignaciones
+                for a in plan.asignaciones
                 if a.duracion_horas > 8
             ]
 
     motor.agregar_regla(MaximoOchoHoras())
     actividades["A001"].duracion = 9
     informe = motor.validar(plan(Asignacion("A001", ["R001"], h(8), h(17))), recursos, actividades)
-    assert codigos(informe) == ["R10"]
+    assert codigos(informe) == ["R99"]
 
 
 def test_no_permite_codigos_de_regla_repetidos(motor):
